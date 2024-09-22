@@ -1,37 +1,62 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+import {Platform, Pressable, Text, View} from "react-native";
+import {useState} from "react";
+import * as MediaLibrary from "expo-media-library";
+import {ResizeMode, Video} from "expo-av";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    const [displayVideoURI, setDisplayVideoURI] = useState<string>("")
+
+    async function loadVideo() {
+        const {status} = await MediaLibrary.requestPermissionsAsync();
+
+        if (status != 'granted') {
+            return
+        }
+
+        const data = await MediaLibrary.getAssetsAsync({
+            first: 1,
+            sortBy: MediaLibrary.SortBy.creationTime,
+            album: await MediaLibrary.getAlbumAsync(Platform.OS == "ios" ? "All Photos" : "All"),
+            mediaType: ["video"],
+        });
+
+        MediaLibrary.getAssetInfoAsync(data.assets[0].id).then((infos) => {
+            setDisplayVideoURI(infos.localUri!)
+        })
+
     }
-  }, [loaded]);
 
-  if (!loaded) {
-    return null;
-  }
+    const STATUS_BAR_HEIGHT: number = useSafeAreaInsets().top
 
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-    </ThemeProvider>
-  );
+    return (
+        <View style={{
+            paddingTop: STATUS_BAR_HEIGHT,
+        }}>
+            <Pressable style={{
+                padding: 5
+            }} onPress={() => loadVideo()}>
+                <Text>Load video</Text>
+            </Pressable>
+            {
+                displayVideoURI != "" && <Video
+                    source={{
+                        uri: displayVideoURI
+                    }}
+                    useNativeControls={true}
+                    style={{
+                        width: "100%",
+                        aspectRatio: 1,
+                    }}
+                    shouldPlay={true}
+                    isLooping={true}
+                    resizeMode={ResizeMode.COVER}
+                    onError={(e) => {
+                        console.log(e)
+                    }}
+                />
+            }
+        </View>
+    );
 }
